@@ -8,3 +8,4 @@
 * ls -l
 * pwd
 * cd \<DIR\>
+* mkdir \<DIRNAME\>
