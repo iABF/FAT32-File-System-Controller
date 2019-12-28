@@ -118,28 +118,38 @@ def printComplexList(dirList):
     longName = ''
     nameList = []
     for di in dirList:
-        if di.AttrByte & 0x08:
-            # Volume label
-            continue
         if di.AttrByte == 0x0F:
             # Long names are successive
             longName = ''.join(di.LoneFileName) + longName
+        elif di.AttrByte & 0x08:
+            # Volume label
+            continue
         elif di.AttrByte & 0x10:
             # subdirectory
             if len(longName):
                 nameList.append('{:08b} '.format(di.AttrByte)
                                 + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
-                                + ' {:>10d}  '.format(di.FileSize) + longName)
+                                + ' {:>10d}  '.format(di.FileSize) + '\033[1;32;41m' + longName + '\033[0m')
                 longName = ''
             else:
-                nameList.append('{:08b} '.format(di.AttrByte)
-                                + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
-                                + ' {:>10d}  '.format(di.FileSize)
-                                + ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt))
+                if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
+                        len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
+                    nameList.append('{:08b} '.format(di.AttrByte)
+                                    + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                    + ' {:>10d}  '.format(di.FileSize)
+                                    + '\033[1;32;41m' + ''.join(di.ShortFileName) + '\033[0m')
+                else:
+                    nameList.append('{:08b} '.format(di.AttrByte)
+                                    + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                    + ' {:>10d}  '.format(di.FileSize)
+                                    + '\033[1;32;41m' + ''.join(di.ShortFileName) + '.' + ''.join(
+                        di.ShortFileExt) + '\033[0m')
         elif di.AttrByte & 0x20:
             # archive
             if len(longName):
-                nameList.append(longName)
+                nameList.append('{:08b} '.format(di.AttrByte)
+                                + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                + ' {:>10d}  '.format(di.FileSize) + longName)
                 longName = ''
             else:
                 nameList.append('{:08b} '.format(di.AttrByte)
@@ -226,6 +236,7 @@ def changeDir(commandDir):
 
 def execute(command):
     if command == 'exit' or command == 'quit':
+        file.close()
         exit()
     command = command.split()
     if command[0] == 'ls':
