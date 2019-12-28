@@ -10,3 +10,4 @@
 * cd \<DIR\>
 * mkdir \<DIRNAME\>
 * file \<FILENAME\>
+* tree

@@ -429,6 +429,61 @@ def showFile(fileName):
     print(''.join(fileList))
 
 
+def printDepth(depth):
+    if depth == 0:
+        print('* ', end='')
+    else:
+        for _ in range(depth - 1):
+            print('  ', end='')
+        print('|-* ', end='')
+
+
+def printTree(rootDir, depth=0):
+    dirList = getDirList(rootDir)
+    longName = ''
+    for di in dirList:
+        if di.AttrByte == 0x0F:
+            # Long names are successive
+            longName = ''.join(di.LoneFileName) + longName
+        elif di.AttrByte & 0x08:
+            # Volume label
+            continue
+        elif di.AttrByte & 0x10:
+            # subdirectory
+            if len(longName):
+                printDepth(depth)
+                print('\033[1;32;41m' + longName + '\033[0m')
+                ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                printTree(ans, depth + 1)
+                longName = ''
+            else:
+                assert longName == ''
+                if len(di.ShortFileExt) == 0:
+                    if ''.join(di.ShortFileName) == '.' or ''.join(di.ShortFileName) == '..':
+                        continue
+                    printDepth(depth)
+                    print('\033[1;32;41m' + ''.join(di.ShortFileName) + '\033[0m')
+                    ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                    ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                    printTree(ans, depth + 1)
+                else:
+                    printDepth(depth)
+                    print('\033[1;32;41m' + ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt) + '\033[0m')
+                    ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                    ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                    printTree(ans, depth + 1)
+        elif di.AttrByte & 0x20:
+            # archive
+            if len(longName):
+                printDepth(depth)
+                print(longName)
+                longName = ''
+            else:
+                printDepth(depth)
+                print(''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt))
+
+
 def execute(command):
     if command.strip() == '':
         return
@@ -450,6 +505,8 @@ def execute(command):
         makeDir(command[1])
     elif command[0] == 'file':
         showFile(command[1])
+    elif command[0] == 'tree':
+        printTree(curDir)
 
 
 if __name__ == '__main__':
