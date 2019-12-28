@@ -9,3 +9,4 @@
 * pwd
 * cd \<DIR\>
 * mkdir \<DIRNAME\>
+* file \<FILENAME\>

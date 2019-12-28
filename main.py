@@ -370,6 +370,65 @@ def makeDir(dirName):
         makeShortDir(dirName)
 
 
+def showFile(fileName):
+    dirList = getDirList(curDir)
+    longName = ''
+    fileList = []
+    for di in dirList:
+        if di.AttrByte == 0x0F:
+            # Long names are successive
+            longName = ''.join(di.LoneFileName) + longName
+        elif di.AttrByte & 0x08:
+            # Volume label
+            continue
+        elif di.AttrByte & 0x10:
+            longName = ''
+        elif di.AttrByte & 0x20:
+            # archive
+            if len(longName):
+                if longName == fileName:
+                    ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                    ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                    while True:
+                        file.seek(fat.RootDirOffset + (ans - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster)
+                        cluster = file.read(fat.sizeofCluster)
+                        fileList.append(str(cluster, encoding='utf8'))
+                        if 0x2 <= ans <= 0xFFFFFEF:
+                            ans = getNextClusterNumber(ans)
+                        elif 0x0FFFFFF8 <= ans <= 0x0FFFFFFF:
+                            break
+                    break
+                longName = ''
+            else:
+                if len(di.ShortFileExt) == 0:
+                    if ''.join(di.ShortFileName) == fileName:
+                        ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                        ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                        while True:
+                            file.seek(fat.RootDirOffset + (ans - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster)
+                            cluster = file.read(fat.sizeofCluster)
+                            fileList.append(str(cluster, encoding='utf8'))
+                            if 0x2 <= ans <= 0xFFFFFEF:
+                                ans = getNextClusterNumber(ans)
+                            elif 0x0FFFFFF8 <= ans <= 0x0FFFFFFF:
+                                break
+                        break
+                else:
+                    if ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt) == fileName:
+                        ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                        ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                        while True:
+                            file.seek(fat.RootDirOffset + (ans - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster)
+                            cluster = file.read(fat.sizeofCluster)
+                            fileList.append(str(cluster, encoding='utf8'))
+                            if 0x2 <= ans <= 0xFFFFFEF:
+                                ans = getNextClusterNumber(ans)
+                            elif 0x0FFFFFF8 <= ans <= 0x0FFFFFFF:
+                                break
+                        break
+    print(''.join(fileList))
+
+
 def execute(command):
     if command.strip() == '':
         return
@@ -389,6 +448,8 @@ def execute(command):
         changeDir(command[1])
     elif command[0] == 'mkdir':
         makeDir(command[1])
+    elif command[0] == 'file':
+        showFile(command[1])
 
 
 if __name__ == '__main__':
