@@ -229,7 +229,9 @@ def getDirOneStep(curPos, dirName):
                         ans = int.from_bytes(di.FirstClusterHigh, 'little')
                         ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
                         return ans
-    raise Exception('Illegal directory')
+        elif di.AttrByte & 0x20:
+            longName = ''
+    raise Exception('Illegal directory!')
 
 
 def changeDir(commandDir):
@@ -240,6 +242,18 @@ def changeDir(commandDir):
     dirList = commandDir.split('/')
     for d in dirList:
         curDir = getDirOneStep(curDir, d)
+        if d == '.':
+            pass
+        elif d == '..':
+            if curFullDir.count('/') == 1:
+                curFullDir = '/'
+            else:
+                curFullDir = curFullDir[:curFullDir.rfind('/')]
+        else:
+            if curFullDir.endswith('/'):
+                curFullDir = curFullDir + d
+            else:
+                curFullDir = curFullDir + '/' + d
     if curDir == 0:
         curDir = 2
         curFullDir = '/'
@@ -314,6 +328,8 @@ def makeDir(dirName):
 
 
 def execute(command):
+    if command.strip() == '':
+        return
     if command == 'exit' or command == 'quit':
         file.close()
         exit()
@@ -333,7 +349,7 @@ def execute(command):
 
 
 if __name__ == '__main__':
-    print("****************************Welcome to FAT32****************************")
+    print("**************************** Welcome to FAT32 ****************************")
     while True:
         cmd = input("[iABF@FAT32] » ")
         cmd = cmd.split(';')
