@@ -1,3 +1,6 @@
+import time
+
+
 class DBR:
     def __init__(self, data):
         data.seek(0x0B)
@@ -22,9 +25,10 @@ class FAT:
         self.sizeofDir = 32
         self.sizeofCluster = Dbr.sizeofSector * Dbr.SectorPerCluster
         self.NumberOfDirInCluster = int(self.sizeofCluster / self.sizeofDir)
+        self.AvailableClusterNumberInFAT = int(Dbr.SectorPerFAT * Dbr.sizeofSector / 4) - 2
 
 
-file = open('fat32d.img', 'rb')
+file = open('fat32d.img', 'rb+')
 # Assert this FS has 2 FAT
 dbr = DBR(file)
 fat = FAT(dbr)
@@ -56,7 +60,7 @@ class DIR:
             self.FileSize = int.from_bytes(dirBegin[0x1C:0x20], 'little')
             if self.ShortFileName[0] != 0x00:
                 self.ShortFileName = [chr(x) for x in self.ShortFileName if x != 0x20]
-                self.ShortFileExt = [chr(x) for x in self.ShortFileExt if x != 0x20]
+                self.ShortFileExt = [chr(x) for x in self.ShortFileExt if x != 0x20 and x != 0x00]
         else:
             self.LongAttr = dirBegin[0x0]
             self.LoneFileName = []
@@ -67,6 +71,14 @@ class DIR:
             for i in range(28, 31, 2):
                 self.LoneFileName.append(dirBegin[i])
             self.LoneFileName = [chr(x) for x in self.LoneFileName if x != 0xFF and x != 0x00]
+
+
+def findAvailableClusterNumber():
+    for i in range(2, fat.AvailableClusterNumberInFAT):
+        content = getNextClusterNumber(i)
+        if content == 0x00000000:
+            return i
+    raise Exception('Sorry, this file system has no more space!')
 
 
 def getNextClusterNumber(curClusterNumber):
@@ -100,12 +112,12 @@ def getDirList(clusterNumber):
     return dirList
 
 
-def bytes2TimeMonthDayYear(time, date):
-    time = int.from_bytes(time, 'little')
+def bytes2TimeMonthDayYear(tim, date):
+    tim = int.from_bytes(tim, 'little')
     date = int.from_bytes(date, 'little')
-    second = (time << 1) & 0x3f
-    minute = (time >> 5) & 0x3f
-    hour = time >> 11
+    second = (tim << 1) & 0x3f
+    minute = (tim >> 5) & 0x3f
+    hour = tim >> 11
     day = date & 0x1f
     month = (date >> 5) & 0xf
     year = (date >> 9) + 1980
@@ -128,19 +140,18 @@ def printComplexList(dirList):
             # subdirectory
             if len(longName):
                 nameList.append('{:08b} '.format(di.AttrByte)
-                                + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                + bytes2TimeMonthDayYear(di.CreateTime, di.CreateDate)
                                 + ' {:>10d}  '.format(di.FileSize) + '\033[1;32;41m' + longName + '\033[0m')
                 longName = ''
             else:
-                if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
-                        len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
+                if len(di.ShortFileExt) == 0:
                     nameList.append('{:08b} '.format(di.AttrByte)
-                                    + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                    + bytes2TimeMonthDayYear(di.CreateTime, di.CreateDate)
                                     + ' {:>10d}  '.format(di.FileSize)
                                     + '\033[1;32;41m' + ''.join(di.ShortFileName) + '\033[0m')
                 else:
                     nameList.append('{:08b} '.format(di.AttrByte)
-                                    + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                    + bytes2TimeMonthDayYear(di.CreateTime, di.CreateDate)
                                     + ' {:>10d}  '.format(di.FileSize)
                                     + '\033[1;32;41m' + ''.join(di.ShortFileName) + '.' + ''.join(
                         di.ShortFileExt) + '\033[0m')
@@ -148,12 +159,12 @@ def printComplexList(dirList):
             # archive
             if len(longName):
                 nameList.append('{:08b} '.format(di.AttrByte)
-                                + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                + bytes2TimeMonthDayYear(di.CreateTime, di.CreateDate)
                                 + ' {:>10d}  '.format(di.FileSize) + longName)
                 longName = ''
             else:
                 nameList.append('{:08b} '.format(di.AttrByte)
-                                + bytes2TimeMonthDayYear(di.LastModifiedTime, di.LastModifiedDate)
+                                + bytes2TimeMonthDayYear(di.CreateTime, di.CreateDate)
                                 + ' {:>10d}  '.format(di.FileSize)
                                 + ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt))
     for name in nameList:
@@ -177,8 +188,7 @@ def printList(dirList):
                 longName = ''
             else:
                 assert longName == ''
-                if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
-                        len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
+                if len(di.ShortFileExt) == 0:
                     nameList.append('\033[1;32;41m' + ''.join(di.ShortFileName) + '\033[0m')
                 else:
                     nameList.append(
@@ -209,8 +219,7 @@ def getDirOneStep(curPos, dirName):
                     return ans
                 longName = ''
             else:
-                if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
-                        len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
+                if len(di.ShortFileExt) == 0:
                     if ''.join(di.ShortFileName) == dirName:
                         ans = int.from_bytes(di.FirstClusterHigh, 'little')
                         ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
@@ -224,14 +233,84 @@ def getDirOneStep(curPos, dirName):
 
 
 def changeDir(commandDir):
-    global curDir
+    global curDir, curFullDir
     if commandDir.startswith('/'):
         curDir = 0x2
+        curFullDir = '/'
     dirList = commandDir.split('/')
     for d in dirList:
         curDir = getDirOneStep(curDir, d)
     if curDir == 0:
         curDir = 2
+        curFullDir = '/'
+
+
+def makeShortDir(dirName):
+    global curDir
+    clusterNumber = curDir
+    file.seek(fat.RootDirOffset + (clusterNumber - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster)
+    cluster = file.read(fat.sizeofCluster)
+    while True:
+        for i in range(fat.NumberOfDirInCluster):
+            cur = DIR(cluster, i * fat.sizeofDir)
+            if cur.AttrByte != 0x0F and cur.ShortFileName[0] == 0x00:
+                baseOffset = fat.RootDirOffset + (
+                        clusterNumber - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster + i * fat.sizeofDir
+                name = bytes(dirName, encoding='utf-8')
+                for _ in range(8 - len(name)):
+                    name = name + 0x20.to_bytes(length=1, byteorder='little')
+                file.seek(baseOffset + 0x00)
+                file.write(name)
+                attr = 0x10.to_bytes(length=1, byteorder='little')
+                file.seek(baseOffset + 0x0B)
+                file.write(attr)
+                size = 0x00.to_bytes(length=4, byteorder='little')
+                file.seek(baseOffset + 0x1C)
+                file.write(size)
+                t = time.localtime()
+                year, month, day, hour, minute, second = t[:6]
+                year = (year - 1980) << 9
+                month = int(month) << 5
+                day = int(day)
+                hour = int(hour) << 11
+                minute = int(minute) << 5
+                second = int(second // 2)
+                ti = (hour + minute + second).to_bytes(2, 'little')
+                date = (year + month + day).to_bytes(2, 'little')
+                file.seek(baseOffset + 0x0E)
+                file.write(ti)
+                file.seek(baseOffset + 0x10)
+                file.write(date)
+                newDir = findAvailableClusterNumber()
+                file.seek(fat.FAT1Offset + newDir * 4)
+                file.write(b'0x0FFFFFFF')
+                newDir = newDir.to_bytes(4, 'little')
+                low = newDir[:2]
+                high = newDir[2:]
+                file.seek(baseOffset + 0x14)
+                file.write(high)
+                file.seek(baseOffset + 0x1A)
+                file.write(low)
+                return
+        temp = clusterNumber
+        clusterNumber = getNextClusterNumber(clusterNumber)
+        if 0x2 <= clusterNumber <= 0xFFFFFEF:
+            file.seek(fat.RootDirOffset + (clusterNumber - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster)
+            cluster = file.read(fat.sizeofCluster)
+        elif 0x0FFFFFF8 <= clusterNumber <= 0x0FFFFFFF:
+            # Reach the end of this directory and the end of this cluster at the same time
+            file.seek(fat.FAT1Offset + temp * 4)
+            newDir = findAvailableClusterNumber()
+            file.write(newDir.to_bytes(length=4, byteorder='little', signed=False))
+            file.seek(fat.FAT1Offset + newDir * 4)
+            file.write(b'0x0FFFFFFF')
+        else:
+            break
+
+
+def makeDir(dirName):
+    if len(dirName) <= 8:
+        makeShortDir(dirName)
 
 
 def execute(command):
@@ -249,6 +328,8 @@ def execute(command):
         print(curFullDir)
     elif command[0] == 'cd':
         changeDir(command[1])
+    elif command[0] == 'mkdir':
+        makeDir(command[1])
 
 
 if __name__ == '__main__':
