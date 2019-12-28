@@ -163,15 +163,16 @@ def printList(dirList):
         elif di.AttrByte & 0x10:
             # subdirectory
             if len(longName):
-                nameList.append(longName)
+                nameList.append('\033[1;32;41m' + longName + '\033[0m')
                 longName = ''
             else:
                 assert longName == ''
                 if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
                         len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
-                    nameList.append(''.join(di.ShortFileName))
+                    nameList.append('\033[1;32;41m' + ''.join(di.ShortFileName) + '\033[0m')
                 else:
-                    nameList.append(''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt))
+                    nameList.append(
+                        '\033[1;32;41m' + ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt) + '\033[0m')
         elif di.AttrByte & 0x20:
             # archive
             if len(longName):
@@ -198,24 +199,29 @@ def getDirOneStep(curPos, dirName):
                     return ans
                 longName = ''
             else:
-                if ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt) == dirName:
-                    ans = int.from_bytes(di.FirstClusterHigh, 'little')
-                    ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
-                    return ans
+                if (len(di.ShortFileName) == 1 and di.ShortFileName[0] == '.') or (
+                        len(di.ShortFileName) == 2 and di.ShortFileName[0] == di.ShortFileName[1] == '.'):
+                    if ''.join(di.ShortFileName) == dirName:
+                        ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                        ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                        return ans
+                else:
+                    if ''.join(di.ShortFileName) + '.' + ''.join(di.ShortFileExt) == dirName:
+                        ans = int.from_bytes(di.FirstClusterHigh, 'little')
+                        ans = (ans << 16) + int.from_bytes(di.FirstClusterLow, 'little')
+                        return ans
     raise Exception('Illegal directory')
 
 
 def changeDir(commandDir):
     global curDir
-    if commandDir == '.' or commandDir == './':
-        return
     if commandDir.startswith('/'):
         curDir = 0x2
     dirList = commandDir.split('/')
-    if dirList[0] == '.':
-        dirList = dirList[1:]
     for d in dirList:
         curDir = getDirOneStep(curDir, d)
+    if curDir == 0:
+        curDir = 2
 
 
 def execute(command):
