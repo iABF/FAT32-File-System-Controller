@@ -273,14 +273,8 @@ def makeShortDir(dirName):
                 name = bytes(dirName, encoding='utf-8')
                 for _ in range(8 - len(name)):
                     name = name + 0x20.to_bytes(length=1, byteorder='little')
-                file.seek(baseOffset + 0x00)
-                file.write(name)
                 attr = 0x10.to_bytes(length=1, byteorder='little')
-                file.seek(baseOffset + 0x0B)
-                file.write(attr)
                 size = 0x00.to_bytes(length=4, byteorder='little')
-                file.seek(baseOffset + 0x1C)
-                file.write(size)
                 t = time.localtime()
                 year, month, day, hour, minute, second = t[:6]
                 year = (year - 1980) << 9
@@ -291,14 +285,63 @@ def makeShortDir(dirName):
                 second = int(second // 2)
                 ti = (hour + minute + second).to_bytes(2, 'little')
                 date = (year + month + day).to_bytes(2, 'little')
+                file.seek(baseOffset + 0x00)
+                file.write(name)
+                file.seek(baseOffset + 0x0B)
+                file.write(attr)
+                file.seek(baseOffset + 0x1C)
+                file.write(size)
                 file.seek(baseOffset + 0x0E)
                 file.write(ti)
                 file.seek(baseOffset + 0x10)
                 file.write(date)
                 newDir = findAvailableClusterNumber()
+                newDirNumber = newDir
                 file.seek(fat.FAT1Offset + newDir * 4)
                 file.write(b'0x0FFFFFFF')
                 newDir = newDir.to_bytes(4, 'little')
+                low = newDir[:2]
+                high = newDir[2:]
+                file.seek(baseOffset + 0x14)
+                file.write(high)
+                file.seek(baseOffset + 0x1A)
+                file.write(low)
+                fatherDir = curDir
+                baseOffset = fat.RootDirOffset + (
+                        newDirNumber - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster + 0 * fat.sizeofDir
+                name = bytes('.', encoding='utf-8')
+                for _ in range(8 - len(name)):
+                    name = name + 0x20.to_bytes(length=1, byteorder='little')
+                file.seek(baseOffset + 0x00)
+                file.write(name)
+                file.seek(baseOffset + 0x0B)
+                file.write(attr)
+                file.seek(baseOffset + 0x1C)
+                file.write(size)
+                file.seek(baseOffset + 0x0E)
+                file.write(ti)
+                file.seek(baseOffset + 0x10)
+                file.write(date)
+                file.seek(baseOffset + 0x14)
+                file.write(high)
+                file.seek(baseOffset + 0x1A)
+                file.write(low)
+                baseOffset = fat.RootDirOffset + (
+                        newDirNumber - dbr.ClusterNumberOfRootDir) * fat.sizeofCluster + 1 * fat.sizeofDir
+                name = bytes('..', encoding='utf-8')
+                for _ in range(8 - len(name)):
+                    name = name + 0x20.to_bytes(length=1, byteorder='little')
+                file.seek(baseOffset + 0x00)
+                file.write(name)
+                file.seek(baseOffset + 0x0B)
+                file.write(attr)
+                file.seek(baseOffset + 0x1C)
+                file.write(size)
+                file.seek(baseOffset + 0x0E)
+                file.write(ti)
+                file.seek(baseOffset + 0x10)
+                file.write(date)
+                newDir = fatherDir.to_bytes(4, 'little')
                 low = newDir[:2]
                 high = newDir[2:]
                 file.seek(baseOffset + 0x14)
